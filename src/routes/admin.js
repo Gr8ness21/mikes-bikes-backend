@@ -5,6 +5,7 @@ const SeasonalRate = require('../models/SeasonalRate');
 const PartnerInquiry = require('../models/PartnerInquiry');
 const { authRequired, requireRole } = require('../middleware/auth');
 const { getRateConfig } = require('../services/quote');
+const { parseDay, startOfDay, endOfDay } = require('../utils/dates');
 
 const router = express.Router();
 router.use(authRequired, requireRole('admin'));
@@ -38,7 +39,13 @@ router.post('/seasonal', async (req, res) => {
   if (!name || !startDate || !endDate || multiplier == null) {
     return res.status(400).json({ message: 'name, dates, and multiplier are required' });
   }
-  const seasonal = await SeasonalRate.create({ name, startDate, endDate, multiplier, note });
+  const seasonal = await SeasonalRate.create({
+    name,
+    startDate: startOfDay(parseDay(startDate)),
+    endDate: endOfDay(parseDay(endDate)),
+    multiplier,
+    note,
+  });
   res.status(201).json({ seasonal });
 });
 
@@ -58,8 +65,8 @@ router.post('/blackouts', async (req, res) => {
     return res.status(400).json({ message: 'Start and end dates are required' });
   }
   const blackout = await BlackoutDate.create({
-    startDate,
-    endDate,
+    startDate: startOfDay(parseDay(startDate)),
+    endDate: endOfDay(parseDay(endDate)),
     reason,
     createdBy: req.user._id,
   });

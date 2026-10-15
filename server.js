@@ -31,6 +31,7 @@ app.use('/api/bookings', require('./src/routes/bookings'));
 app.use('/api/availability', require('./src/routes/availability'));
 app.use('/api/admin', require('./src/routes/admin'));
 app.use('/api/contact', require('./src/routes/contact'));
+app.use('/api/geo', require('./src/routes/geo'));
 
 app.use((err, _req, res, _next) => {
   console.error(err);

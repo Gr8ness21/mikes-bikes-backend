@@ -5,6 +5,9 @@ const Booking = require('../models/Booking');
 const router = express.Router();
 
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(400).send('STRIPE_SECRET_KEY is not set');
+  }
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   const sig = req.headers['stripe-signature'];
   let event;

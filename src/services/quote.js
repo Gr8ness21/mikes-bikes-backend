@@ -42,23 +42,34 @@ async function calculateQuote({
   if (insideI285) {
     i285Applied = true;
     notes.push(
-      'Atlanta I-285 promo: $70 flat rate because both pickup and drop-off are inside the perimeter.'
+      `Atlanta I-285 promo: $${config.i285FlatRate} flat rate because both pickup and drop-off are inside the perimeter.`
     );
-    const total = config.i285FlatRate;
+    let total = config.i285FlatRate * seasonalMultiplier;
+    if (seasonalName) {
+      notes.push(`Seasonal / holiday rate "${seasonalName}" × ${seasonalMultiplier}.`);
+    }
+    let discount404 = 0;
+    if (!operable) {
+      discount404 = Math.round(total * (config.inoperableDiscountPct / 100) * 100) / 100;
+      total = Math.round((total - discount404) * 100) / 100;
+      notes.push(
+        `404 discount: ${config.inoperableDiscountPct}% off because the motorcycle is inoperable.`
+      );
+    }
     const depositDue = Math.round(total * 50) / 100;
     return {
       currency: 'usd',
-      subtotal: total,
+      subtotal: config.i285FlatRate,
       enclosedPremium: 0,
       seasonalMultiplier,
-      discount404: 0,
+      discount404,
       i285Applied,
       total,
       depositDue,
       breakdown: {
         miles,
         perMile: 0,
-        base: total,
+        base: config.i285FlatRate,
         seasonalName,
         notes,
       },

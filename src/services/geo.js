@@ -18,29 +18,58 @@ function insideI285(lat, lng) {
   return pointInPolygon(lng, lat, i285.polygon);
 }
 
+let nominatimQueue = Promise.resolve();
+
+function enqueueNominatim(work) {
+  const run = nominatimQueue.then(work, work);
+  nominatimQueue = run
+    .then(() => new Promise((resolve) => setTimeout(resolve, 1100)))
+    .catch(() => undefined);
+  return run;
+}
+
 async function geocodeAddress(query) {
-  const url = new URL('https://nominatim.openstreetmap.org/search');
-  url.searchParams.set('q', query);
-  url.searchParams.set('format', 'json');
-  url.searchParams.set('limit', '1');
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'MikesBikesTransport/1.0 (contact: admin@mikesbikes.local)',
-      Accept: 'application/json',
-    },
+  return enqueueNominatim(async () => {
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', query);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('limit', '5');
+    url.searchParams.set('countrycodes', 'us');
+    url.searchParams.set('addressdetails', '1');
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'MikesBikesTransport/1.0 (contact: admin@mikesbikes.local)',
+        Accept: 'application/json',
+      },
+    });
+    if (!res.ok) {
+      throw new Error('Geocoding failed');
+    }
+    const data = await res.json();
+    if (!data.length) {
+      throw new Error(`No location found for: ${query}`);
+    }
+    const preferredTypes = new Set([
+      'city',
+      'town',
+      'suburb',
+      'neighbourhood',
+      'village',
+      'hamlet',
+      'residential',
+      'building',
+      'house',
+      'road',
+    ]);
+    const ranked = [...data].sort((a, b) => Number(b.place_rank) - Number(a.place_rank));
+    const pick =
+      ranked.find((place) => preferredTypes.has(place.addresstype)) || ranked[0];
+    return {
+      lat: Number(pick.lat),
+      lng: Number(pick.lng ?? pick.lon),
+      displayName: pick.display_name,
+    };
   });
-  if (!res.ok) {
-    throw new Error('Geocoding failed');
-  }
-  const data = await res.json();
-  if (!data.length) {
-    throw new Error(`No location found for: ${query}`);
-  }
-  return {
-    lat: Number(data[0].lat),
-    lng: Number(data[0].lon),
-    displayName: data[0].display_name,
-  };
 }
 
 function haversineMiles(a, b) {
@@ -56,33 +85,106 @@ function haversineMiles(a, b) {
 
 const ROAD_FACTOR = 13 / 10;
 
-async function drivingMiles(from, to) {
-  const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`;
+async function drivingRoute(from, to) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
   try {
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error('OSRM error');
     const data = await res.json();
-    const meters = data?.routes?.[0]?.distance;
+    const route = data?.routes?.[0];
+    const meters = route?.distance;
     if (!meters) throw new Error('No route');
-    return meters / 1609.344;
+    const path = (route.geometry?.coordinates || []).map(([lng, lat]) => [lat, lng]);
+    return {
+      miles: meters / 1609.344,
+      path,
+    };
   } catch {
-    return haversineMiles(from, to) * ROAD_FACTOR;
+    return {
+      miles: haversineMiles(from, to) * ROAD_FACTOR,
+      path: [
+        [from.lat, from.lng],
+        [to.lat, to.lng],
+      ],
+    };
   }
+}
+
+const STATE_ABBR = {
+  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA',
+  Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE', Florida: 'FL', Georgia: 'GA',
+  Hawaii: 'HI', Idaho: 'ID', Illinois: 'IL', Indiana: 'IN', Iowa: 'IA', Kansas: 'KS',
+  Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME', Maryland: 'MD', Massachusetts: 'MA',
+  Michigan: 'MI', Minnesota: 'MN', Mississippi: 'MS', Missouri: 'MO', Montana: 'MT',
+  Nebraska: 'NE', Nevada: 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND',
+  Ohio: 'OH', Oklahoma: 'OK', Oregon: 'OR', Pennsylvania: 'PA', 'Rhode Island': 'RI',
+  'South Carolina': 'SC', 'South Dakota': 'SD', Tennessee: 'TN', Texas: 'TX',
+  Utah: 'UT', Vermont: 'VT', Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV',
+  Wisconsin: 'WI', Wyoming: 'WY', 'District of Columbia': 'DC',
+};
+
+async function reverseGeocode(lat, lng) {
+  return enqueueNominatim(async () => {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse');
+    url.searchParams.set('lat', String(lat));
+    url.searchParams.set('lon', String(lng));
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('addressdetails', '1');
+    url.searchParams.set('zoom', '18');
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'MikesBikesTransport/1.0 (contact: admin@mikesbikes.local)',
+        Accept: 'application/json',
+      },
+    });
+    if (!res.ok) {
+      throw new Error('Could not read that GPS location');
+    }
+    const data = await res.json();
+    const a = data.address || {};
+    const street = [a.house_number, a.road || a.pedestrian || a.residential].filter(Boolean).join(' ');
+    const city = a.city || a.town || a.village || a.suburb || a.hamlet || a.county || '';
+    const stateName = a.state || '';
+    const state = STATE_ABBR[stateName] || (stateName.length === 2 ? stateName.toUpperCase() : '');
+    const zip = (a.postcode || '').split('-')[0];
+    return {
+      lat: Number(lat),
+      lng: Number(lng),
+      displayName: data.display_name,
+      street,
+      city,
+      state,
+      zip,
+    };
+  });
+}
+
+async function drivingMiles(from, to) {
+  const route = await drivingRoute(from, to);
+  return route.miles;
 }
 
 async function resolveTrip(pickupAddress, dropoffAddress) {
   const pickup = await geocodeAddress(pickupAddress);
-  await new Promise((r) => setTimeout(r, 1100));
   const dropoff = await geocodeAddress(dropoffAddress);
-  const miles = await drivingMiles(pickup, dropoff);
+  const route = await drivingRoute(pickup, dropoff);
   const i285Hit =
     insideI285(pickup.lat, pickup.lng) && insideI285(dropoff.lat, dropoff.lng);
   return {
     pickup,
     dropoff,
-    miles: Math.max(1, Math.round(miles * 10) / 10),
+    path: route.path,
+    miles: Math.max(1, Math.round(route.miles * 10) / 10),
     insideI285: i285Hit,
   };
 }
 
-module.exports = { geocodeAddress, drivingMiles, insideI285, resolveTrip };
+module.exports = {
+  geocodeAddress,
+  reverseGeocode,
+  drivingMiles,
+  drivingRoute,
+  insideI285,
+  resolveTrip,
+};

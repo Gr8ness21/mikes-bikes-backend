@@ -2,20 +2,9 @@ const express = require('express');
 const BlackoutDate = require('../models/BlackoutDate');
 const Booking = require('../models/Booking');
 const { getRateConfig } = require('../services/quote');
+const { startOfDay, endOfDay } = require('../utils/dates');
 
 const router = express.Router();
-
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function endOfDay(d) {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
 
 router.get('/', async (req, res) => {
   const from = req.query.from ? new Date(req.query.from) : new Date();
@@ -27,7 +16,7 @@ router.get('/', async (req, res) => {
   });
   const bookings = await Booking.find({
     serviceType: 'scheduled',
-    status: { $in: ['deposit_paid', 'scheduled', 'in_transit'] },
+    status: { $in: ['pending_deposit', 'deposit_paid', 'scheduled', 'in_transit'] },
     scheduledDate: { $gte: from, $lte: to },
   }).select('scheduledDate');
 
