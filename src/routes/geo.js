@@ -1,5 +1,5 @@
 const express = require('express');
-const { geocodeAddress, reverseGeocode, drivingRoute } = require('../services/geo');
+const { reverseGeocode, drivingRoute, findPlaces } = require('../services/geo');
 
 const router = express.Router();
 
@@ -13,10 +13,15 @@ router.post('/lookup', async (req, res) => {
     if (!city || !state) {
       return res.status(400).json({ message: 'City and state are required' });
     }
-    const place = await geocodeAddress(formatAddress({ street, city, state, zip }));
-    res.json({ place });
+    const result = await findPlaces({ street, city, state, zip });
+    res.json({
+      place: result.place,
+      suggestions: result.suggestions || [],
+      message: result.message,
+      query: formatAddress({ street, city, state, zip }),
+    });
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ message: err.message, suggestions: err.suggestions || [] });
   }
 });
 

@@ -10,9 +10,23 @@ const stripeWebhook = require('./src/routes/stripe');
 const app = express();
 const port = Number(process.env.PORT) || 5001;
 
+function allowOrigin(origin) {
+  if (!origin) return true;
+  const configured = process.env.CLIENT_URL || 'http://localhost:5173';
+  if (origin === configured) return true;
+  return (
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+    /^https?:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin) ||
+    /^https?:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/.test(origin)
+  );
+}
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin(origin, callback) {
+      if (allowOrigin(origin)) return callback(null, true);
+      return callback(new Error(`CORS blocked for ${origin}`));
+    },
     credentials: true,
   })
 );
@@ -62,7 +76,7 @@ async function ensureAdmin() {
 async function start() {
   await connectDb();
   await ensureAdmin();
-  app.listen(port, () => {
+  app.listen(port, '0.0.0.0', () => {
     console.log(`Mike's Bikes API listening on port ${port}`);
   });
 }

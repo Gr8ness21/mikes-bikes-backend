@@ -51,7 +51,7 @@ router.post('/', async (req, res) => {
       quote,
     });
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ message: err.message, suggestions: err.suggestions || [] });
   }
 });
 
