@@ -13,12 +13,16 @@ const port = Number(process.env.PORT) || 5001;
 
 function allowOrigin(origin) {
   if (!origin) return true;
-  const configured = process.env.CLIENT_URL || 'http://localhost:5173';
-  if (origin === configured) return true;
+  const extras = String(process.env.CLIENT_URL || 'http://localhost:5173')
+    .split(',')
+    .map((value) => value.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+  if (extras.includes(origin)) return true;
   return (
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
     /^https?:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin) ||
-    /^https?:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/.test(origin)
+    /^https?:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/.test(origin) ||
+    /^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin)
   );
 }
 
@@ -36,9 +40,12 @@ app.use('/api/stripe', stripeWebhook);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/api/health', (_req, res) => {
+function health(_req, res) {
   res.json({ ok: true, brand: "Mike's Bikes Transportation Services" });
-});
+}
+
+app.get('/', health);
+app.get('/api/health', health);
 
 app.use('/api/auth', require('./src/routes/auth'));
 app.use('/api/quotes', require('./src/routes/quotes'));
