@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -32,6 +33,7 @@ app.use(
 );
 
 app.use('/api/stripe', stripeWebhook);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/api/health', (_req, res) => {
@@ -45,6 +47,8 @@ app.use('/api/bookings', require('./src/routes/bookings'));
 app.use('/api/availability', require('./src/routes/availability'));
 app.use('/api/admin', require('./src/routes/admin'));
 app.use('/api/contact', require('./src/routes/contact'));
+app.use('/api/emergency', require('./src/routes/emergency'));
+app.use('/api/gallery', require('./src/routes/gallery'));
 app.use('/api/geo', require('./src/routes/geo'));
 
 app.use((err, _req, res, _next) => {

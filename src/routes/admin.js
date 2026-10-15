@@ -1,9 +1,14 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const RateConfig = require('../models/RateConfig');
 const BlackoutDate = require('../models/BlackoutDate');
 const SeasonalRate = require('../models/SeasonalRate');
 const PartnerInquiry = require('../models/PartnerInquiry');
+const EmergencyRequest = require('../models/EmergencyRequest');
+const GalleryItem = require('../models/GalleryItem');
 const { authRequired, requireRole } = require('../middleware/auth');
+const { galleryUpload, galleryDir } = require('../middleware/upload');
 const { getRateConfig } = require('../services/quote');
 const { parseDay, startOfDay, endOfDay } = require('../utils/dates');
 
@@ -81,6 +86,83 @@ router.delete('/blackouts/:id', async (req, res) => {
 router.get('/inquiries', async (_req, res) => {
   const inquiries = await PartnerInquiry.find().sort({ createdAt: -1 });
   res.json({ inquiries });
+});
+
+router.get('/emergencies', async (_req, res) => {
+  const emergencies = await EmergencyRequest.find().sort({ createdAt: -1 });
+  res.json({ emergencies });
+});
+
+function kindFromMime(mime) {
+  return String(mime).startsWith('video/') ? 'video' : 'image';
+}
+
+function boolField(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return value === true || value === 'true' || value === 'on' || value === '1';
+}
+
+router.get('/gallery', async (_req, res) => {
+  const items = await GalleryItem.find().sort({ order: 1, createdAt: 1 });
+  res.json({ items });
+});
+
+router.post('/gallery', galleryUpload.array('files', 20), async (req, res) => {
+  const files = req.files || [];
+  if (!files.length) {
+    return res.status(400).json({ message: 'Choose photos or videos to upload' });
+  }
+  const last = await GalleryItem.findOne().sort({ order: -1 });
+  let order = last ? last.order + 1 : 0;
+  const showOnHome = boolField(req.body.showOnHome, true);
+  const showOnAbout = boolField(req.body.showOnAbout, true);
+  const alt = String(req.body.alt || '').trim();
+  const items = await GalleryItem.create(
+    files.map((file) => {
+      const storedName = file.filename;
+      const doc = {
+        originalName: file.originalname,
+        storedName,
+        url: `/uploads/gallery/${storedName}`,
+        mimeType: file.mimetype,
+        kind: kindFromMime(file.mimetype),
+        alt,
+        showOnHome,
+        showOnAbout,
+        order: order++,
+      };
+      return doc;
+    })
+  );
+  res.status(201).json({ items });
+});
+
+router.put('/gallery/order', async (req, res) => {
+  const ids = req.body.ids;
+  if (!Array.isArray(ids) || !ids.length) {
+    return res.status(400).json({ message: 'ids array required' });
+  }
+  await Promise.all(ids.map((id, index) => GalleryItem.findByIdAndUpdate(id, { order: index })));
+  const items = await GalleryItem.find().sort({ order: 1, createdAt: 1 });
+  res.json({ items });
+});
+
+router.patch('/gallery/:id', async (req, res) => {
+  const item = await GalleryItem.findById(req.params.id);
+  if (!item) return res.status(404).json({ message: 'Media not found' });
+  if (req.body.alt != null) item.alt = String(req.body.alt);
+  if (req.body.showOnHome != null) item.showOnHome = boolField(req.body.showOnHome, item.showOnHome);
+  if (req.body.showOnAbout != null) item.showOnAbout = boolField(req.body.showOnAbout, item.showOnAbout);
+  await item.save();
+  res.json({ item });
+});
+
+router.delete('/gallery/:id', async (req, res) => {
+  const item = await GalleryItem.findByIdAndDelete(req.params.id);
+  if (!item) return res.status(404).json({ message: 'Media not found' });
+  const filePath = path.join(galleryDir, item.storedName);
+  fs.unlink(filePath, () => {});
+  res.json({ ok: true });
 });
 
 module.exports = router;
