@@ -15,6 +15,7 @@ router.post('/', async (req, res) => {
     model = '',
     operable = true,
     notes = '',
+    estimatedTotal = '',
   } = req.body;
   if (!name || !email || !phone || !pickupAddress) {
     return res.status(400).json({ message: 'Name, email, phone, and pickup location are required' });
@@ -30,6 +31,7 @@ router.post('/', async (req, res) => {
     model,
     operable: operable !== false && operable !== 'false',
     notes,
+    estimatedTotal,
   });
   res.status(201).json({ request });
 });

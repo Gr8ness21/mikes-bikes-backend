@@ -12,6 +12,7 @@ const emergencyRequestSchema = new mongoose.Schema(
     model: { type: String, default: '' },
     operable: { type: Boolean, default: true },
     notes: { type: String, default: '' },
+    estimatedTotal: { type: String, default: '' },
   },
   { timestamps: true }
 );
