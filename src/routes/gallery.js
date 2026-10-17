@@ -1,7 +1,21 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const GalleryItem = require('../models/GalleryItem');
+const { galleryDir } = require('../middleware/upload');
 
 const router = express.Router();
+
+router.get('/file/:id', async (req, res) => {
+  const item = await GalleryItem.findById(req.params.id).select('+data');
+  if (!item) return res.status(404).json({ message: 'Media not found' });
+  const filePath = path.join(galleryDir, item.storedName);
+  res.setHeader('Content-Type', item.mimeType || 'application/octet-stream');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  if (fs.existsSync(filePath)) return res.sendFile(filePath);
+  if (item.data && item.data.length) return res.send(item.data);
+  return res.status(404).json({ message: 'Media missing' });
+});
 
 router.get('/', async (req, res) => {
   const filter = {};

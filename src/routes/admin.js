@@ -9,6 +9,7 @@ const EmergencyRequest = require('../models/EmergencyRequest');
 const GalleryItem = require('../models/GalleryItem');
 const { authRequired, requireRole } = require('../middleware/auth');
 const { galleryUpload, galleryDir } = require('../middleware/upload');
+const { persistTop3 } = require('../services/galleryPersist');
 const { getRateConfig } = require('../services/quote');
 const { parseDay, startOfDay, endOfDay } = require('../utils/dates');
 
@@ -134,7 +135,12 @@ router.post('/gallery', galleryUpload.array('files', 20), async (req, res) => {
       return doc;
     })
   );
-  res.status(201).json({ items });
+  await persistTop3();
+  const saved = await GalleryItem.find({ _id: { $in: items.map((item) => item._id) } }).sort({
+    order: 1,
+    createdAt: 1,
+  });
+  res.status(201).json({ items: saved });
 });
 
 router.put('/gallery/order', async (req, res) => {
@@ -143,6 +149,7 @@ router.put('/gallery/order', async (req, res) => {
     return res.status(400).json({ message: 'ids array required' });
   }
   await Promise.all(ids.map((id, index) => GalleryItem.findByIdAndUpdate(id, { order: index })));
+  await persistTop3();
   const items = await GalleryItem.find().sort({ order: 1, createdAt: 1 });
   res.json({ items });
 });
@@ -162,6 +169,7 @@ router.delete('/gallery/:id', async (req, res) => {
   if (!item) return res.status(404).json({ message: 'Media not found' });
   const filePath = path.join(galleryDir, item.storedName);
   fs.unlink(filePath, () => {});
+  await persistTop3();
   res.json({ ok: true });
 });
 

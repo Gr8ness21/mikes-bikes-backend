@@ -11,8 +11,18 @@ const galleryItemSchema = new mongoose.Schema(
     showOnHome: { type: Boolean, default: true },
     showOnAbout: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
+    top3: { type: Boolean, default: false },
+    durable: { type: Boolean, default: false },
+    data: { type: Buffer, select: false },
   },
   { timestamps: true }
 );
+
+galleryItemSchema.set('toJSON', {
+  transform(_doc, ret) {
+    delete ret.data;
+    return ret;
+  },
+});
 
 module.exports = mongoose.model('GalleryItem', galleryItemSchema);
