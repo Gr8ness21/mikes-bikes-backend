@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const { connectDb } = require('./src/config/db');
 const User = require('./src/models/User');
 const RateConfig = require('./src/models/RateConfig');
-const { persistTop3 } = require('./src/services/galleryPersist');
+const { persistTop5 } = require('./src/services/galleryPersist');
 const stripeWebhook = require('./src/routes/stripe');
 
 const app = express();
@@ -89,9 +89,9 @@ async function start() {
   await connectDb();
   await ensureAdmin();
   try {
-    await persistTop3();
+    await persistTop5();
   } catch (err) {
-    console.error('Could not persist Top 3 gallery items', err);
+    console.error('Could not persist Top 5 gallery items', err);
   }
   app.listen(port, '0.0.0.0', () => {
     console.log(`Mike's Bikes API listening on port ${port}`);

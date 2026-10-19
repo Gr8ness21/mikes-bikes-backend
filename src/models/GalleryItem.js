@@ -12,7 +12,9 @@ const galleryItemSchema = new mongoose.Schema(
     showOnAbout: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
     top3: { type: Boolean, default: false },
+    top5: { type: Boolean, default: false },
     durable: { type: Boolean, default: false },
+    gridFsId: { type: mongoose.Schema.Types.ObjectId },
     data: { type: Buffer, select: false },
   },
   { timestamps: true }

@@ -1,35 +1,61 @@
 const fs = require('fs');
 const path = require('path');
+const mongoose = require('mongoose');
 const GalleryItem = require('../models/GalleryItem');
 const { galleryDir } = require('../middleware/upload');
 
-const TOP3_COUNT = 3;
-const MAX_BYTES = 12 * 1024 * 1024;
+const TOP_COUNT = 5;
 
 function durableUrl(id) {
   return `/api/gallery/file/${id}`;
 }
 
-async function persistTop3() {
+function galleryBucket() {
+  return new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'gallery' });
+}
+
+function uploadFromPath(item, filePath) {
+  return new Promise((resolve, reject) => {
+    const upload = galleryBucket().openUploadStream(item.storedName, {
+      contentType: item.mimeType,
+      metadata: { galleryItemId: String(item._id) },
+    });
+    fs.createReadStream(filePath)
+      .pipe(upload)
+      .on('error', reject)
+      .on('finish', () => resolve(upload.id));
+  });
+}
+
+async function deleteGridFs(id) {
+  if (!id) return;
+  try {
+    await galleryBucket().delete(id);
+  } catch {
+    /* already gone */
+  }
+}
+
+async function persistTop5() {
   const items = await GalleryItem.find().select('+data').sort({ order: 1, createdAt: 1 });
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
-    const top3 = index < TOP3_COUNT;
-    item.top3 = top3;
-    const hasData = Boolean(item.data && item.data.length);
-    if (top3 && !hasData) {
+    const featured = index < TOP_COUNT;
+    item.top5 = featured;
+    item.top3 = featured;
+    if (featured && !item.gridFsId) {
       const filePath = path.join(galleryDir, item.storedName);
       if (fs.existsSync(filePath)) {
-        const buf = fs.readFileSync(filePath);
-        if (buf.length <= MAX_BYTES) item.data = buf;
+        try {
+          item.gridFsId = await uploadFromPath(item, filePath);
+        } catch (err) {
+          console.error(`Could not store gallery file ${item._id}:`, err.message);
+        }
       }
     }
-    if (item.data && item.data.length) {
-      item.durable = true;
-      item.url = durableUrl(item._id);
-    } else {
-      item.durable = false;
-    }
+    const durable = Boolean(item.gridFsId || (item.data && item.data.length));
+    item.durable = durable;
+    if (durable) item.url = durableUrl(item._id);
     try {
       await item.save();
     } catch (err) {
@@ -38,4 +64,10 @@ async function persistTop3() {
   }
 }
 
-module.exports = { persistTop3, durableUrl };
+module.exports = {
+  persistTop5,
+  persistTop3: persistTop5,
+  durableUrl,
+  galleryBucket,
+  deleteGridFs,
+};

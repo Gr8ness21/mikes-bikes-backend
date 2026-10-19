@@ -3,6 +3,7 @@ const path = require('path');
 const express = require('express');
 const GalleryItem = require('../models/GalleryItem');
 const { galleryDir } = require('../middleware/upload');
+const { galleryBucket } = require('../services/galleryPersist');
 
 const router = express.Router();
 
@@ -13,6 +14,13 @@ router.get('/file/:id', async (req, res) => {
   res.setHeader('Content-Type', item.mimeType || 'application/octet-stream');
   res.setHeader('Cache-Control', 'public, max-age=86400');
   if (fs.existsSync(filePath)) return res.sendFile(filePath);
+  if (item.gridFsId) {
+    const stream = galleryBucket().openDownloadStream(item.gridFsId);
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(404).json({ message: 'Media missing' });
+    });
+    return stream.pipe(res);
+  }
   if (item.data && item.data.length) return res.send(item.data);
   return res.status(404).json({ message: 'Media missing' });
 });
