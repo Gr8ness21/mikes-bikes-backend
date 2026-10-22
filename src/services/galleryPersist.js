@@ -36,14 +36,14 @@ async function deleteGridFs(id) {
   }
 }
 
-async function persistTop5() {
+async function persistGallery() {
   const items = await GalleryItem.find().select('+data').sort({ order: 1, createdAt: 1 });
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
     const featured = index < TOP_COUNT;
     item.top5 = featured;
     item.top3 = featured;
-    if (featured && !item.gridFsId) {
+    if (!item.gridFsId) {
       const filePath = path.join(galleryDir, item.storedName);
       if (fs.existsSync(filePath)) {
         try {
@@ -65,8 +65,9 @@ async function persistTop5() {
 }
 
 module.exports = {
-  persistTop5,
-  persistTop3: persistTop5,
+  persistGallery,
+  persistTop5: persistGallery,
+  persistTop3: persistGallery,
   durableUrl,
   galleryBucket,
   deleteGridFs,
