@@ -39,6 +39,7 @@ router.post('/', async (req, res) => {
       operable: Boolean(operable),
       insideI285: trip.insideI285,
       forDate: scheduledDate || undefined,
+      serviceType,
     });
 
     res.json({

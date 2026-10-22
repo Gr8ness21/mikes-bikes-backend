@@ -25,12 +25,18 @@ async function getRateConfig() {
   return config;
 }
 
+function amountDueNow(total, serviceType) {
+  if (serviceType === 'scheduled') return Math.round(total * 50) / 100;
+  return total;
+}
+
 async function calculateQuote({
   miles,
   transportType = 'open',
   operable = true,
   insideI285 = false,
   forDate,
+  serviceType = 'scheduled',
 }) {
   const config = await getRateConfig();
   const { multiplier: seasonalMultiplier, name: seasonalName } =
@@ -56,7 +62,12 @@ async function calculateQuote({
         `404 discount: ${config.inoperableDiscountPct}% off because the motorcycle is inoperable.`
       );
     }
-    const depositDue = Math.round(total * 50) / 100;
+    if (serviceType === 'scheduled') {
+      notes.push('Scheduled transport: 50% deposit due now.');
+    } else {
+      notes.push('Emergency pickup: full amount due before the bike is loaded.');
+    }
+    const depositDue = amountDueNow(total, serviceType);
     return {
       currency: 'usd',
       subtotal: config.i285FlatRate,
@@ -104,7 +115,12 @@ async function calculateQuote({
   }
 
   const total = Math.round(subtotal * 100) / 100;
-  const depositDue = Math.round(total * 50) / 100;
+  if (serviceType === 'scheduled') {
+    notes.push('Scheduled transport: 50% deposit due now.');
+  } else {
+    notes.push('Emergency pickup: full amount due before the bike is loaded.');
+  }
+  const depositDue = amountDueNow(total, serviceType);
 
   return {
     currency: 'usd',

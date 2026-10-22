@@ -109,6 +109,7 @@ router.post('/', async (req, res) => {
       operable: isOperable,
       insideI285: trip.insideI285,
       forDate: scheduledDate,
+      serviceType,
     });
 
     let paymentIntentId;
