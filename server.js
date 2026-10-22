@@ -80,8 +80,12 @@ async function ensureAdmin() {
     });
     console.log(`Seeded admin ${email}`);
   }
-  if (!(await RateConfig.findOne({ key: 'default' }))) {
+  const rates = await RateConfig.findOne({ key: 'default' });
+  if (!rates) {
     await RateConfig.create(RateConfig.defaults());
+  } else if (rates.i285FlatRate === 70) {
+    rates.i285FlatRate = 60;
+    await rates.save();
   }
 }
 
